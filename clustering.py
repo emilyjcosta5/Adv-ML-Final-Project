@@ -22,6 +22,8 @@ class BayesianDistance:
         '''
         # TO-DO
         # this is where you can make sure the probabilities are tracked?
+        self.number_points = 0
+        self.cluster_probabilites = {}
         pass
 
     def calculate_distance(self, point):
