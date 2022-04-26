@@ -2,7 +2,7 @@ from clustering import Clustering
 import numpy as np
 import pandas as pd
 
-def vary_mean(proportion=(1,1)):
+def vary_clusters(proportion=(1,1), n_clusters=2):
     euclidean_accuracies = []
     column_values = ["x","y"]
     mean = (0,0)
