@@ -1,7 +1,4 @@
 '''
-# experiment with
-# linkage {‘ward’, ‘complete’, ‘average’, ‘single’}
-
 # resources:
 # https://scikit-learn.org/stable/modules/generated/sklearn.cluster.AgglomerativeClustering.html#sklearn.cluster.AgglomerativeClustering
 '''
@@ -14,95 +11,97 @@ import numpy as np
 from sklearn.preprocessing import StandardScaler
 import seaborn as sns
 
-def cluster_data(data, number_clusters, verbose=False):
-    '''
-    Parameters
-    ----------
-    data: pd.DataFrame
-        Dataframe containing the data to be clustered
-    number_clusters: int
-        The number of clusters that the ML should identify
-    verbose: boolean, optional
-        For debugging and info on amount of info being collected.
+class BayesianDistance:
+    def __init__(self, data) -> None:
+        '''
+        Parameters
+        ----------
+        data: pandas.Dataframe
+            Dataframe with contents being the rows of data point and
+            index as the correct cluster and what the point is classified
+        '''
+        # TO-DO
+        # this is where you can make sure the probabilities are tracked?
+        pass
 
-    Returns
-    -------
-    clusters: pd.DataFrame
-        How clusters were formed
-    '''
-    scaler = StandardScaler() 
-    try:
-        scaled = scaler.fit_transform(data)
-    except ValueError:
-        return None
-    data = pd.DataFrame(scaled, index=data.index, columns=data.columns)
-    X = data.copy()
-    clusters = AgglomerativeClustering(affinity='euclidean', n_clusters=number_clusters).fit(X)
-    data['Euclidean Labels'] = clusters.labels_
-    X = data.copy()
-    #clusters = AgglomerativeClustering(affinity=bayesian, n_clusters=number_clusters).fit(X)
-    #data['Bayesian Labels'] = clusters.labels_
-    data['Cluster Number'] = data.index
-    data = data.reset_index(drop=True)
-    return data
+    def calculate_distance(self, point):
+        '''
+        Calculate distance to a point of all points in dataframe
 
-# experiments
-def vary_mean(proportion=(1,1)):
-    euclidean_accuracies = []
-    column_values = ["x","y"]
-    mean = (0,0)
-    cov = ((1,1),(1,1))
-    size = int(100*proportion[0]/proportion[1])
-    cluster_number = 0
-    index_values = [cluster_number for x in range(size)]
-    cluster = np.random.multivariate_normal(mean=mean, cov=cov, size=size)
-    df = pd.DataFrame(data=cluster, index=index_values, columns=column_values)
-    distances = np.linspace(0., 10., num=20)
-    for x in distances:
-        mean = (x,x)
-        cov = ((1,1),(1,1))
-        size = int(100*proportion[0]/proportion[1])
-        cluster_number = 1
-        index_values = [cluster_number for x in range(size)]
-        cluster = np.random.multivariate_normal(mean=mean, cov=cov, size=size)
-        tmp = df.append(pd.DataFrame(data=cluster, index=index_values, columns=column_values))
-        tmp = cluster_data(tmp, 2)
-        euclidean_accuracy = np.abs(tmp['Euclidean Labels'].corr(tmp['Cluster Number'], method='spearman'))
-        euclidean_accuracies.append(euclidean_accuracy)
-    print(euclidean_accuracies)
+        Parameters
+        ----------
+        point: array-like
+            The given point; dimensions must match dataframe
 
-if __name__=="__main__":
-    # scenario 1: 3 equal sized clusters generally separate
-    '''
-    column_values = ["x","y"]
-    mean = (0,0)
-    cov = ((1,1),(1,1))
-    size = 100
-    cluster_number = 0
-    index_values = [cluster_number for x in range(size)]
-    cluster = np.random.multivariate_normal(mean=mean, cov=cov, size=size)
-    df = pd.DataFrame(data=cluster, index=index_values, columns=column_values)
+        Returns
+        -------
+        distances: list
+            The distances of all the points from a given point
+        '''
+        distances = []
+        # TO-DO
+        # use pandas apply with _calculate_distance?
+        return distances
 
-    mean = (10,10)
-    cov = ((1,1),(1,1))
-    size = 100
-    cluster_number = 1
-    index_values = [cluster_number for x in range(size)]
-    cluster = np.random.multivariate_normal(mean=mean, cov=cov, size=size)
-    df = df.append(pd.DataFrame(data=cluster, index=index_values, columns=column_values))
+    def _calculate_distance(self, point1, point2):
+        distance = 0
+        # TO-DO
+        return distance
 
-    mean = (20,20)
-    cov = ((1,1),(1,1))
-    size = 100
-    cluster_number = 2
-    index_values = [cluster_number for x in range(size)]
-    cluster = np.random.multivariate_normal(mean=mean, cov=cov, size=size)
-    df = df.append(pd.DataFrame(data=cluster, index=index_values, columns=column_values))
-    print(cluster_data(df, 3))
-    '''
-    vary_mean()
+class Clustering:
+    def __init__(self, data, number_clusters, linkage="single", verbose=False) -> None:
+        '''
+        Parameters
+        ----------
+        data: pd.DataFrame
+            Dataframe containing the data to be clustered
+        number_clusters: int
+            The number of clusters that the ML should identify
+        verbose: boolean, optional
+            For debugging and info on amount of info being collected.
+        linkage: str, {'single', 'ward'} default: 'single'
+            How to link points to clusters
+            - Ward minimizes the sum of squared differences within all clusters. 
+              It is a variance-minimizing approach and in this sense is similar 
+              to the k-means objective function but tackled with an agglomerative 
+              hierarchical approach.
+            - Single linkage minimizes the distance between the closest 
+              observations of pairs of clusters.
+        '''
+        self.data = data
+        self.linkage = linkage
+        self.n_clusters = number_clusters
+        self.cluster_data = self.cluster_data()
+    
+    def get_clustered_data(self):
+        return self.cluster_data
 
-    # scenario 2: 3 equal size clusters that are generally mixed 
-    # scenario 3: 2 unequal size (4:1) clusters that are generally separate 
-    # scenario 4: 2 unequal size (4:1) clusters that are generally mixed
+    def cluster_data(self):
+        scaler = StandardScaler() 
+        try:
+            scaled = scaler.fit_transform(data)
+        except ValueError:
+            return None
+        data = pd.DataFrame(scaled, index=data.index, columns=data.columns)
+        X = data.copy()
+        clusters = AgglomerativeClustering(affinity='euclidean', n_clusters=self.n_clusters).fit(X)
+        data['Labels'] = clusters.labels_
+        X = data.copy()
+        data['Cluster Number'] = data.index
+        data = data.reset_index(drop=True)
+        return data
+
+    def add_point(self, point):
+        if self.linkage=='single':
+            self._single_point(point)
+        elif self.linkage=='ward':
+            self._ward_point(point)
+
+    def _single_point(self, point):
+        # TO-DO
+        pass
+
+    def _ward_point(self, point):
+        # TO-DO
+        pass
      
