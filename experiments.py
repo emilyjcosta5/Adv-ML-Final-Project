@@ -46,14 +46,13 @@ def linear_equally_spaced_clusters(n_points=100, proportion=(1,1), n_clusters=2)
         tmp = clustering.get_clustered_data()
         euclidean_accuracy = np.abs(tmp['Label'].corr(tmp['Cluster Number'], method='spearman'))
         euclidean_accuracies.append(euclidean_accuracy)
-        # TO-DO
         # add 100 new points per cluster and measure accuracy
         points = pd.DataFrame(columns=column_values + ['Label', 'Cluster Number'])
         for p in range(100):
             for i in range(0,n_clusters):
                 mean = (i*x,i*x)
                 cov = ((1,1),(1,1))
-                point = np.random.multivariate_normal(mean=mean, cov=cov, size=1)
+                point = np.random.multivariate_normal(mean=mean, cov=cov, size=1)[0]
                 classification = clustering.add_point(point)
                 points.loc[len(points.index)] = [point[0], point[1], classification, i]
         bayesian_accuracy = np.abs(points['Label'].corr(points['Cluster Number'], method='spearman'))
