@@ -44,11 +44,11 @@ def linear_equally_spaced_clusters(n_points=100, proportion=(1,1), n_clusters=2)
         # do initial clustering and check accuracy of clustering methodology
         clustering = Clustering(tmp, n_clusters)
         tmp = clustering.get_clustered_data()
-        euclidean_accuracy = np.abs(tmp['Euclidean Labels'].corr(tmp['Cluster Number'], method='spearman'))
+        euclidean_accuracy = np.abs(tmp['Label'].corr(tmp['Cluster Number'], method='spearman'))
         euclidean_accuracies.append(euclidean_accuracy)
         # TO-DO
         # add 100 new points per cluster and measure accuracy
-        points = pd.DataFrame(columns=column_values + ['Bayesian Label', 'Cluster Number'])
+        points = pd.DataFrame(columns=column_values + ['Label', 'Cluster Number'])
         for p in range(100):
             for i in range(0,n_clusters):
                 mean = (i*x,i*x)
@@ -56,7 +56,7 @@ def linear_equally_spaced_clusters(n_points=100, proportion=(1,1), n_clusters=2)
                 point = np.random.multivariate_normal(mean=mean, cov=cov, size=1)
                 classification = clustering.add_point(point)
                 points.loc[len(points.index)] = [point[0], point[1], classification, i]
-        bayesian_accuracy = np.abs(points['Bayesian Label'].corr(points['Cluster Number'], method='spearman'))
+        bayesian_accuracy = np.abs(points['Label'].corr(points['Cluster Number'], method='spearman'))
         bayesian_accuracies.append(bayesian_accuracy)
     print(distances)
     print(euclidean_accuracies)
@@ -64,36 +64,9 @@ def linear_equally_spaced_clusters(n_points=100, proportion=(1,1), n_clusters=2)
     return euclidean_accuracies, bayesian_accuracies
 
 if __name__=="__main__":
+    linear_equally_spaced_clusters()
+
     # scenario 1: 3 equal sized clusters generally separate
-    '''
-    column_values = ["x","y"]
-    mean = (0,0)
-    cov = ((1,1),(1,1))
-    size = 100
-    cluster_number = 0
-    index_values = [cluster_number for x in range(size)]
-    cluster = np.random.multivariate_normal(mean=mean, cov=cov, size=size)
-    df = pd.DataFrame(data=cluster, index=index_values, columns=column_values)
-
-    mean = (10,10)
-    cov = ((1,1),(1,1))
-    size = 100
-    cluster_number = 1
-    index_values = [cluster_number for x in range(size)]
-    cluster = np.random.multivariate_normal(mean=mean, cov=cov, size=size)
-    df = df.append(pd.DataFrame(data=cluster, index=index_values, columns=column_values))
-
-    mean = (20,20)
-    cov = ((1,1),(1,1))
-    size = 100
-    cluster_number = 2
-    index_values = [cluster_number for x in range(size)]
-    cluster = np.random.multivariate_normal(mean=mean, cov=cov, size=size)
-    df = df.append(pd.DataFrame(data=cluster, index=index_values, columns=column_values))
-    print(cluster_data(df, 3))
-    '''
-    vary_mean()
-
     # scenario 2: 3 equal size clusters that are generally mixed 
     # scenario 3: 2 unequal size (4:1) clusters that are generally separate 
     # scenario 4: 2 unequal size (4:1) clusters that are generally mixed

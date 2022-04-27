@@ -25,7 +25,7 @@ class Clustering:
         verbose: boolean, optional
             For debugging and info on amount of info being collected.
         linkage: str, {'single', 'ward'} default: 'single'
-            How to link points to clusters
+            How to link points to clusters; we are implementing 2 methods
             - Ward minimizes the sum of squared differences within all clusters. 
               It is a variance-minimizing approach and in this sense is similar 
               to the k-means objective function but tackled with an agglomerative 
@@ -51,7 +51,7 @@ class Clustering:
         X = scaled.copy()
         clusters = AgglomerativeClustering(affinity='euclidean', linkage=self.linkage, n_clusters=self.n_clusters).fit(X)
         data['Point'] = data.apply(lambda d: list((d[p] for p in data.columns)), axis=1)
-        data.drop(df.columns.difference(['Point']), 1, inplace=True)
+        data.drop(data.columns.difference(['Point']), 1, inplace=True)
         data['Label'] = clusters.labels_
         X = data.copy()
         data['Cluster Number'] = data.index
@@ -59,7 +59,7 @@ class Clustering:
         return data
 
     def add_point(self, point):
-        classification = None
+        classsification = None
         if self.linkage=='single':
             classification = self._single_point(point)
         elif self.linkage=='ward':
