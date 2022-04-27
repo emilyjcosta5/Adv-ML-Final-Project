@@ -10,45 +10,7 @@ import pandas as pd
 import numpy as np
 from sklearn.preprocessing import StandardScaler
 import seaborn as sns
-
-class BayesianDistance:
-    def __init__(self, data) -> None:
-        '''
-        Parameters
-        ----------
-        data: pandas.Dataframe
-            Dataframe with contents being the rows of data point and
-            index as the correct cluster and what the point is classified
-        '''
-        # TO-DO
-        # this is where you can make sure the probabilities are tracked?
-        self.number_points = 0
-        self.cluster_probabilites = {}
-        pass
-
-    def calculate_distance(self, point):
-        '''
-        Calculate distance to a point of all points in dataframe
-
-        Parameters
-        ----------
-        point: array-like
-            The given point; dimensions must match dataframe
-
-        Returns
-        -------
-        distances: list
-            The distances of all the points from a given point
-        '''
-        distances = []
-        # TO-DO
-        # use pandas apply with _calculate_distance?
-        return distances
-
-    def _calculate_distance(self, point1, point2):
-        distance = 0
-        # TO-DO
-        return distance
+from scipy.spatial import distance
 
 class Clustering:
     def __init__(self, data, number_clusters, linkage="single", verbose=False) -> None:
@@ -56,7 +18,8 @@ class Clustering:
         Parameters
         ----------
         data: pd.DataFrame
-            Dataframe containing the data to be clustered
+            Dataframe containing the data to be clustered; must provide cluster number
+            in the index so we can test the classification
         number_clusters: int
             The number of clusters that the ML should identify
         verbose: boolean, optional
@@ -70,40 +33,96 @@ class Clustering:
             - Single linkage minimizes the distance between the closest 
               observations of pairs of clusters.
         '''
-        self.data = data
+        if not linkage in ['single', 'ward']:
+            raise ValueError("Linkage must be 'single' or 'ward'")
         self.linkage = linkage
         self.n_clusters = number_clusters
-        self.cluster_data = self.cluster_data()
+        self.data = self.cluster_data(data)
     
     def get_clustered_data(self):
-        return self.cluster_data
+        return self.data
 
-    def cluster_data(self):
+    def cluster_data(self, data):
         scaler = StandardScaler() 
         try:
             scaled = scaler.fit_transform(data)
         except ValueError:
             return None
-        data = pd.DataFrame(scaled, index=data.index, columns=data.columns)
-        X = data.copy()
-        clusters = AgglomerativeClustering(affinity='euclidean', n_clusters=self.n_clusters).fit(X)
-        data['Labels'] = clusters.labels_
+        X = scaled.copy()
+        clusters = AgglomerativeClustering(affinity='euclidean', linkage=self.linkage, n_clusters=self.n_clusters).fit(X)
+        data['Point'] = data.apply(lambda d: list((d[p] for p in data.columns)), axis=1)
+        data.drop(df.columns.difference(['Point']), 1, inplace=True)
+        data['Label'] = clusters.labels_
         X = data.copy()
         data['Cluster Number'] = data.index
         data = data.reset_index(drop=True)
         return data
 
     def add_point(self, point):
+        classification = None
         if self.linkage=='single':
-            self._single_point(point)
+            classification = self._single_point(point)
         elif self.linkage=='ward':
-            self._ward_point(point)
+            classification = self._ward_point(point)
+        return classification
 
     def _single_point(self, point):
-        # TO-DO
-        pass
+        data = self.data
+        dist = data.apply(lambda d: distance.euclidean(d['Point'],point), axis=1) # this will be changed to Bayesian later on
+        #dist = data.apply(lambda d: self._bayesian_distance(d['Point'],point), axis=1)
+        classification = data['Label'].values[dist.idxmin()]
+        return classification
 
     def _ward_point(self, point):
         # TO-DO
         pass
+
+    def _bayesian_distance(self, point0, point1):
+        '''
+        Calculate distance to a point of all points in dataframe
+
+        Parameters
+        ----------
+        point0-1: array-like
+            A given point; dimensions must match dataframe
+
+        Returns
+        -------
+        distance: list
+            Bayesian distance
+        '''
+        distance = None
+        # TO-DO
+        # use pandas apply with _calculate_distance?
+        return distance
      
+if __name__=="__main__":
+    # scenario 1: 3 equal sized clusters generally separate
+    column_values = ["x","y"]
+    mean = (0,0)
+    cov = ((1,1),(1,1))
+    size = 100
+    cluster_number = 0
+    index_values = [cluster_number for x in range(size)]
+    cluster = np.random.multivariate_normal(mean=mean, cov=cov, size=size)
+    df = pd.DataFrame(data=cluster, index=index_values, columns=column_values)
+
+    mean = (10,10)
+    cov = ((1,1),(1,1))
+    size = 100
+    cluster_number = 1
+    index_values = [cluster_number for x in range(size)]
+    cluster = np.random.multivariate_normal(mean=mean, cov=cov, size=size)
+    df = df.append(pd.DataFrame(data=cluster, index=index_values, columns=column_values))
+
+    mean = (20,20)
+    cov = ((1,1),(1,1))
+    size = 100
+    cluster_number = 2
+    index_values = [cluster_number for x in range(size)]
+    cluster = np.random.multivariate_normal(mean=mean, cov=cov, size=size)
+    df = df.append(pd.DataFrame(data=cluster, index=index_values, columns=column_values))
+    
+    clustering = Clustering(df, 3)
+    print(clustering.get_clustered_data())
+    print(clustering.add_point([0,0]))
