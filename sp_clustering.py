@@ -165,11 +165,6 @@ class Clustering:
             Bayesian distance
         '''
 
-        #bigger cluster -> higher likelihood 
-        #probability of point being near bigger cluster is higher?
-
-
-
         #point1 = single point
         #point0 = all points in dataframe
         
@@ -178,11 +173,14 @@ class Clustering:
         bayes_dist = np.linalg.norm(point0 - point1)
         
 
+
+
         # bayes_dist = None
 
         # TO-DO
         # use pandas apply with _calculate_distance?      <-- since we're passing in a single point instead of the Dataframe, i don't think this is possible?
-        
+        # 1) figure out how to track labels with the distance
+        # 2) get distribution of each cluster(?) or of the label? --> use bayes to calculate P(cluster/label | distance) !!
     
         return bayes_dist
 
