@@ -2,7 +2,6 @@
 # resources:
 # https://scikit-learn.org/stable/modules/generated/sklearn.cluster.AgglomerativeClustering.html#sklearn.cluster.AgglomerativeClustering
 # https://docs.scipy.org/doc/scipy/reference/generated/scipy.spatial.distance.cdist.html
-# https://machinelearningmastery.com/naive-bayes-classifier-scratch-python/#:~:text=Bayes'%20Theorem%20provides%20a%20way,class))%20%2F%20P(data)
 '''
 
 # Authors: Emily Costa + Spenser Cheung 
@@ -11,6 +10,7 @@ from ipaddress import summarize_address_range
 from xml.etree.ElementInclude import include
 from sklearn.cluster import AgglomerativeClustering
 import pandas as pd
+from sklearn.metrics import euclidean_distances
 import numpy as np
 from sklearn.preprocessing import StandardScaler
 import seaborn as sns
@@ -137,9 +137,12 @@ class Clustering:
 
     def _single_point(self, point):
         data = self.data
-        # dist = data.apply(lambda d: distance.euclidean(d['Point'],point), axis=1) # this will be changed to Bayesian later on
-        dist = data.apply(lambda d: self._bayesian_distance(d['Point'],point), axis=1)
-        classification = data['Label'].values[dist.idxmin()]
+        dist = data.apply(lambda x: pd.Series([self._bayesian_distance(x['Point'],point), x['Label'], x['Cluster Number']], index=['Dist', 'Label', 'Cluster Number']), axis = 1) #replace 'Point' column with 'Dist' column
+        classification = data['Label'].values[dist['Dist'].idxmin()]
+
+        # euclid_dist = data.apply(lambda d: distance.euclidean(d['Point'],point), axis=1) # this will be changed to Bayesian later on
+        # old_dist = data.apply(lambda d: self._bayesian_distance(d['Point'],point), axis=1) #df is single column of just dist
+        # old_classification = data['Label'].values[old_dist.idxmin()]
         return classification
 
     def _ward_point(self, point):
@@ -165,22 +168,24 @@ class Clustering:
             Bayesian distance
         '''
 
+        #bigger cluster -> higher likelihood 
+        #probability of point being near bigger cluster is higher?
+
+
+
         #point1 = single point
         #point0 = all points in dataframe
         
         point0 = np.array(point0)
         point1 = np.array(point1)   
-        bayes_dist = np.linalg.norm(point0 - point1)
+        bayes_dist = distance.euclidean(point0, point1)
         
-
-
 
         # bayes_dist = None
 
         # TO-DO
         # use pandas apply with _calculate_distance?      <-- since we're passing in a single point instead of the Dataframe, i don't think this is possible?
-        # 1) figure out how to track labels with the distance
-        # 2) get distribution of each cluster(?) or of the label? --> use bayes to calculate P(cluster/label | distance) !!
+        
     
         return bayes_dist
 
