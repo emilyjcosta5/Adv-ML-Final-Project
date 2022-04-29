@@ -6,6 +6,7 @@
 
 # Authors: Emily Costa + Spenser Cheung 
 # Created on: Apr 26, 2022
+from ipaddress import summarize_address_range
 from xml.etree.ElementInclude import include
 from sklearn.cluster import AgglomerativeClustering
 import pandas as pd
@@ -13,6 +14,9 @@ import numpy as np
 from sklearn.preprocessing import StandardScaler
 import seaborn as sns
 from scipy.spatial import distance
+from math import pi
+from math import exp
+from math import sqrt
 
 import warnings #remove later -> using to make readability of output better
 
@@ -72,6 +76,64 @@ class Clustering:
             classification = self._ward_point(point)
         return classification
 
+########################################################################
+#  Testing Native Bayes Algorithm 
+########################################################################
+    def df_mean(self, df): 
+        return df.agg("mean")
+
+    def df_stdev(self, df): 
+        return df.agg("std")
+
+    def dist_summary_dataset(self,data): 
+        #Calculate mean, stdev and count for each Label(?)
+        grouped = data.groupby('Label').agg(['mean', 'std', 'size'])
+        return grouped
+
+    def summarize_by_class(self, data):
+        separated = data.groupby('Label')
+        summaries = dict()
+        for class_value, rows in separated.items():
+            summaries[class_value] = self.dist_summary_dataset(rows)
+        return summaries
+
+    #Calculate Gaussian prob distribution function for x 
+    def calculate_probability(x, mean, stdev):
+        exponent = exp(-((x-mean)**2 / (2 * stdev**2 )))
+        return (1 / (sqrt(2 * pi) * stdev)) * exponent
+    
+    def calculate_class_probabilities(self,summaries, row):
+        total_rows = sum([summaries[label][0][2] for label in summaries])
+        probabilities = dict()
+        for class_value, class_summaries in summaries.items():
+            probabilities[class_value] = summaries[class_value][0][2]/float(total_rows)
+            for i in range(len(class_summaries)):
+                mean, stdev, count = class_summaries[i]
+                probabilities[class_value] *= self.calculate_probability(row[i], mean, stdev)
+        return probabilities
+    
+    # Predict the class for a given row
+    def predict(self, summaries, row):
+        probabilities = self.calculate_class_probabilities(summaries, row)
+        best_label, best_prob = None, -1
+        for class_value, probability in probabilities.items():
+            if best_label is None or probability > best_prob:
+                best_prob = probability
+                best_label = class_value
+        return best_label
+    
+    # Naive Bayes Algorithm
+    def naive_bayes(self,train, test):
+        summarize = self.summarize_by_class(train)
+        predictions = list()
+        for row in test:
+            output = self.predict(summarize, row)
+            predictions.append(output)
+        return(predictions)
+########################################################################
+#  End of Naive Bayes Algorithm 
+########################################################################
+
     def _single_point(self, point):
         data = self.data
         # dist = data.apply(lambda d: distance.euclidean(d['Point'],point), axis=1) # this will be changed to Bayesian later on
@@ -82,6 +144,10 @@ class Clustering:
     def _ward_point(self, point):
         # TO-DO
         pass
+
+    # def prob_calculation(self, df): 
+    #     probs = df.groupby('Cluster Number').size().div(len(df))
+    #     return probs
 
     def _bayesian_distance(self, point0, point1):
         '''
@@ -97,18 +163,25 @@ class Clustering:
         distance: list
             Bayesian distance
         '''
+
+        #bigger cluster -> higher likelihood 
+        #probability of point being near bigger cluster is higher?
+
+
+
         #point1 = single point
         #point0 = all points in dataframe
-
+        
         point0 = np.array(point0)
-        point1 = np.array(point1)
-
+        point1 = np.array(point1)   
         bayes_dist = np.linalg.norm(point0 - point1)
+        
+
         # bayes_dist = None
 
         # TO-DO
         # use pandas apply with _calculate_distance?      <-- since we're passing in a single point instead of the Dataframe, i don't think this is possible?
-        #
+        
     
         return bayes_dist
 
@@ -142,5 +215,5 @@ if __name__=="__main__":
     df = df.append(pd.DataFrame(data=cluster, index=index_values, columns=column_values))
     
     clustering = Clustering(df, 3)
-    print(clustering.get_clustered_data())
+    # print(clustering.get_clustered_data())
     print(clustering.add_point([0,0]))
