@@ -2,6 +2,7 @@
 # resources:
 # https://scikit-learn.org/stable/modules/generated/sklearn.cluster.AgglomerativeClustering.html#sklearn.cluster.AgglomerativeClustering
 # https://docs.scipy.org/doc/scipy/reference/generated/scipy.spatial.distance.cdist.html
+# https://machinelearningmastery.com/naive-bayes-classifier-scratch-python/#:~:text=Bayes'%20Theorem%20provides%20a%20way,class))%20%2F%20P(data)
 '''
 
 # Authors: Emily Costa + Spenser Cheung 
