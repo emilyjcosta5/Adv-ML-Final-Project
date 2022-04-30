@@ -10,7 +10,6 @@ from ipaddress import summarize_address_range
 from xml.etree.ElementInclude import include
 from sklearn.cluster import AgglomerativeClustering
 import pandas as pd
-from sklearn.metrics import euclidean_distances
 import numpy as np
 from sklearn.preprocessing import StandardScaler
 import seaborn as sns
@@ -137,7 +136,8 @@ class Clustering:
 
     def _single_point(self, point):
         data = self.data
-        dist = data.apply(lambda x: pd.Series([self._bayesian_distance(x['Point'],point), x['Label'], x['Cluster Number']], index=['Dist', 'Label', 'Cluster Number']), axis = 1) #replace 'Point' column with 'Dist' column
+        # dist = data.apply(lambda x: pd.Series([self._bayesian_distance(x['Point'],point), x['Label'], x['Cluster Number']], index=['Dist', 'Label', 'Cluster Number']), axis = 1) #replace 'Point' column with 'Dist' column
+        dist = data.apply(lambda x: pd.Series([distance.euclil(x['Point'],point), x['Label'], x['Cluster Number']], index=['Dist', 'Label', 'Cluster Number']), axis = 1) 
         classification = data['Label'].values[dist['Dist'].idxmin()]
 
         # euclid_dist = data.apply(lambda d: distance.euclidean(d['Point'],point), axis=1) # this will be changed to Bayesian later on
@@ -153,7 +153,7 @@ class Clustering:
     #     probs = df.groupby('Cluster Number').size().div(len(df))
     #     return probs
 
-    def _bayesian_distance(self, point0, point1):
+    def _bayesian_distance(self, dist_matrix): #point0, point1):
         '''
         Calculate distance to a point of all points in dataframe
 
@@ -168,20 +168,47 @@ class Clustering:
             Bayesian distance
         '''
 
-        #bigger cluster -> higher likelihood 
-        #probability of point being near bigger cluster is higher?
-
-
 
         #point1 = single point
-        #point0 = all points in dataframe
+        #point0 = all points in dataframe 
+        # point0 = np.array(point0)
+        # point1 = np.array(point1)   
+        # bayes_dist = np.linalg.norm(point0 - point1)
         
-        point0 = np.array(point0)
-        point1 = np.array(point1)   
-        bayes_dist = distance.euclidean(point0, point1)
-        
+        """pseudocode  from 2021 Journal 
+        https://www.jmlr.org/papers/volume22/20-688/20-688.pdf
 
-        # bayes_dist = None
+
+        for iteration = 1,2,... do 
+            Sample v~N(0,M), set Beta*<-Beta and v*<-v; 
+            for l = 1,...,L do 
+                Update v* <- v* + (epsilon/2)*(partial gradient of log(Product(B*|D))/partial gradient B*);
+                Update B* <- B* + epsilon*M^-1*v*;
+                Update v* <- v* + (epsilon/2)*(partial gradient of log(Product(B*|D))/partial gradient B*);
+                if (B* - B)^T* v* < 0 then 
+                    Break; 
+            Sample u ~ Uniform(0,1); 
+            if u < min{1, exp[-H(B*,-v*) + H(B,v)]}. then 
+                Set B< B*; 
+
+        Algorithm 1: pseudocode of No-U-Turn Hamiltonian MC sampler for Bayesian distance clustering 
+
+        """
+
+
+        """ Lift-and-project HMC from 2019 revision 
+        1) W_i initiallized and sample momentum Q with each q_ij ~ No(0, sig_q**2)
+        2) Leap-frog algorithm in simplex inter for L steps using kinetic and potential functions; 
+            K(Q) = 1/2(sig_q**2)* tr(Q^t * Q)
+            U(W) = -tr{W^t(logD)W lambda (W^t W)^-1} + tr{W^t DW(sigma W^t W)^-1}
+        3) . Compute vertex projection C∗i by setting the largest coordinate in Wi to 1 and others to 0 (corresponding to minimizing Hellinger distance between C∗i and Wi
+        4) . Run Metropolis-Hastings, and accept proposal C∗ if u < U(C∗)K(Q∗)U(C)K(Q), where u ∼ Uniform(0, 1)
+        5) . Sample σh ∼ Inverse-Gamma{(nh − 1)2 + 2, Pi,i0 d[h]i,i0 / 2nh + βσ}, if nh > 1; otherwise update from σh ∼ Inverse-Gamma(2, β
+        6) Sample (π1, . . . , πh) ∼ Dir(α + n1, . . . , α + nh)
+        7) Sample αh using random-walk Metropolis
+        """
+        
+        bayes_dist = None
 
         # TO-DO
         # use pandas apply with _calculate_distance?      <-- since we're passing in a single point instead of the Dataframe, i don't think this is possible?
