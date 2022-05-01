@@ -2,11 +2,13 @@
 # resources:
 # https://scikit-learn.org/stable/modules/generated/sklearn.cluster.AgglomerativeClustering.html#sklearn.cluster.AgglomerativeClustering
 # https://docs.scipy.org/doc/scipy/reference/generated/scipy.spatial.distance.cdist.html
+# https://github.com/leoduan/BayesDistanceClustering/blob/main/hmc.ipynb
 '''
 
 # Authors: Emily Costa + Spenser Cheung 
 # Created on: Apr 26, 2022
 from ipaddress import summarize_address_range
+from secrets import token_urlsafe
 from xml.etree.ElementInclude import include
 from sklearn.cluster import AgglomerativeClustering
 import pandas as pd
@@ -14,10 +16,13 @@ import numpy as np
 from sklearn.preprocessing import StandardScaler
 import seaborn as sns
 from scipy.spatial import distance
-from math import pi
-from math import exp
-from math import sqrt
-
+from math import pi, exp, sqrt
+import torch
+import hamiltorch
+from matplotlib import pyplot as plt
+from statsmodels.tsa.stattools import acf
+import pymc3 as pm3
+import arviz
 import warnings #remove later -> using to make readability of output better
 
 
@@ -76,70 +81,12 @@ class Clustering:
             classification = self._ward_point(point)
         return classification
 
-########################################################################
-#  Testing Native Bayes Algorithm 
-########################################################################
-    def df_mean(self, df): 
-        return df.agg("mean")
-
-    def df_stdev(self, df): 
-        return df.agg("std")
-
-    def dist_summary_dataset(self,data): 
-        #Calculate mean, stdev and count for each Label(?)
-        grouped = data.groupby('Label').agg(['mean', 'std', 'size'])
-        return grouped
-
-    def summarize_by_class(self, data):
-        separated = data.groupby('Label')
-        summaries = dict()
-        for class_value, rows in separated.items():
-            summaries[class_value] = self.dist_summary_dataset(rows)
-        return summaries
-
-    #Calculate Gaussian prob distribution function for x 
-    def calculate_probability(x, mean, stdev):
-        exponent = exp(-((x-mean)**2 / (2 * stdev**2 )))
-        return (1 / (sqrt(2 * pi) * stdev)) * exponent
-    
-    def calculate_class_probabilities(self,summaries, row):
-        total_rows = sum([summaries[label][0][2] for label in summaries])
-        probabilities = dict()
-        for class_value, class_summaries in summaries.items():
-            probabilities[class_value] = summaries[class_value][0][2]/float(total_rows)
-            for i in range(len(class_summaries)):
-                mean, stdev, count = class_summaries[i]
-                probabilities[class_value] *= self.calculate_probability(row[i], mean, stdev)
-        return probabilities
-    
-    # Predict the class for a given row
-    def predict(self, summaries, row):
-        probabilities = self.calculate_class_probabilities(summaries, row)
-        best_label, best_prob = None, -1
-        for class_value, probability in probabilities.items():
-            if best_label is None or probability > best_prob:
-                best_prob = probability
-                best_label = class_value
-        return best_label
-    
-    # Naive Bayes Algorithm
-    def naive_bayes(self,train, test):
-        summarize = self.summarize_by_class(train)
-        predictions = list()
-        for row in test:
-            output = self.predict(summarize, row)
-            predictions.append(output)
-        return(predictions)
-########################################################################
-#  End of Naive Bayes Algorithm 
-########################################################################
-
     def _single_point(self, point):
         data = self.data
         # dist = data.apply(lambda x: pd.Series([self._bayesian_distance(x['Point'],point), x['Label'], x['Cluster Number']], index=['Dist', 'Label', 'Cluster Number']), axis = 1) #replace 'Point' column with 'Dist' column
-        dist = data.apply(lambda x: pd.Series([distance.euclil(x['Point'],point), x['Label'], x['Cluster Number']], index=['Dist', 'Label', 'Cluster Number']), axis = 1) 
+        dist = data.apply(lambda x: pd.Series([distance.euclidean(x['Point'],point), x['Label'], x['Cluster Number']], index=['Dist', 'Label', 'Cluster Number']), axis = 1) 
         classification = data['Label'].values[dist['Dist'].idxmin()]
-
+        
         # euclid_dist = data.apply(lambda d: distance.euclidean(d['Point'],point), axis=1) # this will be changed to Bayesian later on
         # old_dist = data.apply(lambda d: self._bayesian_distance(d['Point'],point), axis=1) #df is single column of just dist
         # old_classification = data['Label'].values[old_dist.idxmin()]
@@ -153,7 +100,39 @@ class Clustering:
     #     probs = df.groupby('Cluster Number').size().div(len(df))
     #     return probs
 
-    def _bayesian_distance(self, dist_matrix): #point0, point1):
+    def one_hot(a, num_classes): 
+        return np.squeeze(np.eye(num_classes)[a.reshape(-1)])
+
+    def closure(self, optimizer, theta): 
+        optimizer.zero_grad()
+        loss = -self.log_prob(theta) 
+        loss.backward() 
+        return loss
+
+    def extractW2(i,n,K,theta):
+        idx = 0
+        idx1 = n*(K-1)
+
+        t = 1E-1
+
+        W0 = theta[ idx: idx1].reshape([n,(K-1)])
+        W1 = torch.hstack([W0,torch.zeros(n,1)])
+        W = torch.softmax((W1)/t,1)
+        return W@W.T
+
+    def extractC(self, i, n, K):
+        theta = self.param_trace[i, ]
+        idx = 0
+        idx1 = n*(K-1)
+
+        t = 1E-1
+
+        W0 = theta[ idx: idx1].reshape([n,(K-1)])
+        W1 = torch.hstack([W0,torch.zeros(n,1)])
+        C = torch.softmax((W1)/t,1)@ np.arange(K)
+        return C
+    
+    def _bayesian_distance(self, dist_matrix, theta): #point0, point1):
         '''
         Calculate distance to a point of all points in dataframe
 
@@ -175,45 +154,221 @@ class Clustering:
         # point1 = np.array(point1)   
         # bayes_dist = np.linalg.norm(point0 - point1)
         
-        """pseudocode  from 2021 Journal 
-        https://www.jmlr.org/papers/volume22/20-688/20-688.pdf
 
+        #calculations done on Gaussian "blobs" for clustering: 
+            #blobs = datasets.make_blobs(n_samples=n_samples, random_stat=0, shuffle=False)
+            #y = blobs[0]
 
-        for iteration = 1,2,... do 
-            Sample v~N(0,M), set Beta*<-Beta and v*<-v; 
-            for l = 1,...,L do 
-                Update v* <- v* + (epsilon/2)*(partial gradient of log(Product(B*|D))/partial gradient B*);
-                Update B* <- B* + epsilon*M^-1*v*;
-                Update v* <- v* + (epsilon/2)*(partial gradient of log(Product(B*|D))/partial gradient B*);
-                if (B* - B)^T* v* < 0 then 
-                    Break; 
-            Sample u ~ Uniform(0,1); 
-            if u < min{1, exp[-H(B*,-v*) + H(B,v)]}. then 
-                Set B< B*; 
+        D = distance.squareform(distance.pdist(dist_matrix)) #input = 'blobs'
+        logD = np.log(D)
+        np.fill_diagonal(logD,0)
+        D_tc = torch.tensor(D)
+        logD_tc = torch.tensor(logD)
+        svdD = np.linalg.svd(D) 
+        p=2  
+        trunc = p+2 
+        n=y.shape[0] 
+        K=32
+        P=n*(K-1)+K+K  
 
-        Algorithm 1: pseudocode of No-U-Turn Hamiltonian MC sampler for Bayesian distance clustering 
-
-        """
-
-
-        """ Lift-and-project HMC from 2019 revision 
-        1) W_i initiallized and sample momentum Q with each q_ij ~ No(0, sig_q**2)
-        2) Leap-frog algorithm in simplex inter for L steps using kinetic and potential functions; 
-            K(Q) = 1/2(sig_q**2)* tr(Q^t * Q)
-            U(W) = -tr{W^t(logD)W lambda (W^t W)^-1} + tr{W^t DW(sigma W^t W)^-1}
-        3) . Compute vertex projection C∗i by setting the largest coordinate in Wi to 1 and others to 0 (corresponding to minimizing Hellinger distance between C∗i and Wi
-        4) . Run Metropolis-Hastings, and accept proposal C∗ if u < U(C∗)K(Q∗)U(C)K(Q), where u ∼ Uniform(0, 1)
-        5) . Sample σh ∼ Inverse-Gamma{(nh − 1)2 + 2, Pi,i0 d[h]i,i0 / 2nh + βσ}, if nh > 1; otherwise update from σh ∼ Inverse-Gamma(2, β
-        6) Sample (π1, . . . , πh) ∼ Dir(α + n1, . . . , α + nh)
-        7) Sample αh using random-walk Metropolis
-        """
+        #log_prob method
+        idx = 0
+        idx1 = n*(K-1)
         
-        bayes_dist = None
-
-        # TO-DO
-        # use pandas apply with _calculate_distance?      <-- since we're passing in a single point instead of the Dataframe, i don't think this is possible?
+        W0 = theta[ idx: idx1].reshape([n,(K-1)])
+        W1 = torch.hstack([W0,torch.zeros(n,1)])
+        W = torch.softmax((W1)/t,1)
         
+        prior_W0 =  - 1/9.0/2.0 * (W0**2).sum()
+        
+        
+        idx = idx1
+        idx1 += K
+        sigma = torch.nn.functional.softplus(theta[ idx: idx1])
+        
+        
+        idx = idx1
+        idx1 += K
+        alpha = torch.nn.functional.softplus(theta[ idx: idx1])
+        
+        prior_alpha =  (- alpha).sum()
+        
+        n_h = torch.diag(W.T@W)
+        
+        prior_sigma = -1000*(sigma**2).sum()
     
+        loglik = torch.trace(W.T@logD_tc@W*(alpha-1)/(n_h)) - torch.trace(W.T@D_tc@W/(n_h*sigma)) +  \
+            (- n_h* ( alpha* torch.log(sigma) + torch.lgamma(alpha))).sum() + prior_sigma + prior_W0 + prior_alpha
+        
+        #initialization using spectral clustering: 
+        scFit = cluster.spectral_clustering(logD -D + 1E6, n_clusters=K) 
+
+        W_init = torch(self.one_hot(scFit,3))
+        W_init = torch.log((W_init+0.1))
+        W_init -= torch.reshape(W_init[:,K-1],[n,1])
+
+        theta = torch.randn(P)
+        theta[:(n*(K-1))] = (W_init[:,:(K-1)]).flatten()
+        theta = theta.requires_grad_() 
+        optimizer = torch.optim.LBFGS([theta], lr=1E-1)
+
+        for t in range(100): 
+            optimizer.step(self.closure(optimizer,theta))
+        
+        idx = 0
+        idx1 = n*(K-1)
+
+        t = 1E-1
+
+        W0 = theta[ idx: idx1].reshape([n,(K-1)])
+        W1 = torch.hstack([W0,torch.zeros(n,1)])
+        W = torch.softmax((W1)/t,1)
+
+        idx = idx1
+        idx1 += K
+        sigma = self.softplus(theta[ idx: idx1])
+
+        idx = idx1
+        idx1 += K
+        alpha = self.softplus(theta[ idx: idx1])
+
+        n_h = torch.diag(W.T@W)
+
+        W_np = W.detach().cpu().numpy() 
+        
+        
+        #plots: 
+        plt.plot((W_np@ np.diag(np.arrange(3))).sum(1))
+        #plt.plot(blobs[1])
+        plt.imshow((W@W.T).detach().numpy())
+
+        H = torch.autograd.functional.hessian(self.log_prob, theta).diagonal()
+        inv_mass = 1.0/H.abs()
+
+        #HMC NUTS
+        step_size = 5E-2
+        hamiltorch.set_random_seed(123)
+        params_init = theta
+
+        num_samples = 3000 # For results in plot num_samples = 12000
+        L = 100
+        burn = 1000 # For results in plot burn = 2000
+
+        params_hmc_nuts = hamiltorch.sample(log_prob_func=(self.log_prob),
+                                            params_init=params_init, num_samples=num_samples,
+                                            step_size=step_size, num_steps_per_sample=L,
+                                            desired_accept_rate=0.6,
+                                            sampler=hamiltorch.Sampler.HMC_NUTS,burn=burn,
+                                            inv_mass = inv_mass
+                                        )
+        
+        #extractW2: 
+        param_trace = torch.vstack(params_hmc_nuts)
+        trace_np = param_trace.detach().cpu().numpy()
+        plt.plot(trace_np[:,1]*1)
+
+        theta = param_trace[1, ]
+        idx = 0
+        idx1 = n*(K-1)
+        t = 1E-1
+        W0 = theta[ idx: idx1].reshape([n,(K-1)])
+        W1 = torch.hstack([W0,torch.zeros(n,1)])
+        W = torch.softmax((W1)/t,1)
+        W_np = W.detach().numpy()
+        plt.plot((W_np@ np.diag(np.arange(3))).sum(1))
+        
+        theta = param_trace[99, ]
+
+        
+        idx = 0
+        idx1 = n*(K-1)
+
+        t = 1E-1
+
+        W0 = theta[ idx: idx1].reshape([n,(K-1)])
+        W1 = torch.hstack([W0,torch.zeros(n,1)])
+        W = torch.softmax((W1)/t,1)
+        W_np = W.detach().numpy()
+
+        plt.plot((W_np@ np.diag(np.arange(3))).sum(1))
+        
+
+        W2 = torch.zeros([n,n])
+        for i in range(param_trace.shape[0]):
+            W2 += self.extractW2(i,n, K,theta)
+        W2_var = (W2/param_trace.shape[0])
+        plt.imshow(W2_var.detach().numpy(),vmin=0, vmax=1)
+
+        C_trace = torch.stack([self.extractC(i,n,K) for i in range(2000)]).round()
+
+        acf_mat = np.vstack([statsmodel.tsa.stattools.acf(param_trace[:,i], fft=False, nlags=40) for i in range(300)])
+        acf_mat[np.isnan(acf_mat)]=0
+        acf_mat[:,0]=1
+
+        ess = np.stack([arviz.ess(param_trace[:,i].numpy()) for i in range(P)])
+
+        #plots
+        fig, ax = plt.subplots(2,2, gridspec_kw={'width_ratios': [1, 1] })
+        fig.set_size_inches([8,6])
+
+        ax[0,0].plot(param_trace[:,(299)*(K-1)])
+        ax[0,0].set_title("Traceplot of $v_{300,1}$", y=-0.3)
+        ax[0,1].plot(np.arange(2000),C_trace[:,299]+1)
+        ax[0,1].set_title("Traceplot of $c_{300}$", y=-0.3)
+        ax[0,1].set_ylim([0.5,3.5])
+        ax[0,1].set_yticks([1,2,3])
+
+        ax[1,0].boxplot(acf_mat[:,:40],  showfliers=False, )
+        ax[1,0].set_xticks( np.arange(6)*5+1)
+        ax[1,0].set_xticklabels(np.arange(6)*5)
+        ax[1,0].set_title("ACF of all the parameters", y=-0.3)
+
+        ax[1,1].boxplot(ess/2000,  showfliers=False, )
+        ax[1,1].set_xticks( [1])
+        ax[1,1].set_xticklabels([""])
+        ax[1,1].set_title("ESS per HMC iteration of all the parameters", y=-0.3)
+        fig.tight_layout(pad=1)
+        # fig.savefig("benchmark_hmc.png")
+       
+        idx = 0
+        idx1 = n*(K-1)
+        W0 = theta[ idx: idx1].reshape([n,(K-1)])
+        W1 = torch.hstack([W0,torch.zeros(n,1)])
+        W = torch.softmax((W1)/t,1)
+
+        prior_W0 =  - 1/9.0/2.0 * (W0**2).sum()
+        idx = idx1
+        idx1 += K
+        sigma = self.softplus(theta[ idx: idx1])
+        idx = idx1
+        idx1 += K
+        alpha = self.softplus(theta[ idx: idx1])
+        prior_alpha =  (- alpha).sum()
+        n_h = torch.diag(W.T@W)
+
+        mapC = C_trace.mode(0)[0]
+        uncertainty = ((C_trace == mapC)*1.0).mean(0)
+
+        #cluster plots 
+        fig, ax = plt.subplots(1,3, gridspec_kw={'width_ratios': [1, 1,1.2] })
+        fig.set_size_inches([8,2.5])
+
+        ax[0].scatter(blobs[0][:,0],blobs[0][:,1], c=blobs[1], alpha=0.5, s=20)
+        ax[0].set_title("Three clusters", y= -0.4)
+
+
+        ax[1].scatter(blobs[0][:,0],blobs[0][:,1], c=mapC.numpy(), alpha=0.5, s=20, cmap='jet')
+        ax[1].set_title("Estimated  $\hat c_i$", y= -0.4)
+
+
+        im1 = ax[2].scatter(blobs[0][:,0],blobs[0][:,1], c=1-uncertainty, alpha=0.5, s=20, cmap='jet', vmin=0,  vmax=0.7)
+        fig.colorbar(im1 ,ax=ax[2])
+        ax[2].set_title("Estimated uncertainty $pr(c_i \\neq \hat c_i)$", y= -0.4)
+
+
+        fig.tight_layout(pad=1.5)
+        fig.savefig("benchmark_hmc_plot.png")
+        bayes_dist = None
         return bayes_dist
 
 if __name__=="__main__":
