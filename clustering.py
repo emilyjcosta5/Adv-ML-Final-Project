@@ -93,7 +93,7 @@ class Clustering:
         X = scaled.copy()
         clusters = AgglomerativeClustering(affinity='euclidean', linkage=self.linkage, n_clusters=self.n_clusters).fit(X)
         data['Point'] = data.apply(lambda d: list((d[p] for p in data.columns)), axis=1)
-        data.drop(data.columns.difference(['Point']), 1, inplace=True)
+        #data.drop(data.columns.difference(['Point']), 1, inplace=True)
         data['Label'] = clusters.labels_
         X = data.copy()
         data['Cluster Number'] = data.index
@@ -110,20 +110,9 @@ class Clustering:
 
     def _single_point(self, point):
         data = self.data
-        dist_2D = data.apply(lambda x: pd.Series([self._2Ddist(x['Point'],point), x['Label'], x['Cluster Number']], index=['Dist', 'Label', 'Cluster Number']), axis = 1) #Creates 2D Dist column of coord points (point0 - point1)
-        bayes_dist = self._bayesian_distance(dist_2D['Dist'])     #dist_2D.apply(lambda x: pd.Series([self._bayesian_distance(x['Dist']), x['Label'], x['Cluster Number']], index=['Dist', 'Label', 'Cluster Number']), axis = 1) #perform bayes_distance algorithm
-        # dist = data.apply(lambda x: pd.Series([self.test(x['Point'],point), x['Label'], x['Cluster Number']], index=['Dist', 'Label', 'Cluster Number']), axis = 1) 
-        
-
-        classification = bayes_dist
-        # try: 
-        #     classification = dist_2D['Label'].values[dist_2D['Dist'].equals(bayes_dist)]
-        # except: 
-        #     classification = None
-        
-        # euclid_dist = data.apply(lambda d: distance.euclidean(d['Point'],point), axis=1) # this will be changed to Bayesian later on
-        # old_dist = data.apply(lambda d: self._bayesian_distance(d['Point'],point), axis=1) #df is single column of just dist
-        # old_classification = data['Label'].values[old_dist.idxmin()]
+        dist = data.apply(lambda d: distance.euclidean(d['Point'],point), axis=1) # this will be changed to Bayesian later on
+        #dist = data.apply(lambda d: self._bayesian_distance(d['Point'],point), axis=1)
+        classification = data['Label'].values[dist.idxmin()]
         return classification
 
     def _ward_point(self, point):
