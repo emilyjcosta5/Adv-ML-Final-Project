@@ -1,0 +1,4 @@
+git+https://github.com/AdamCobb/hamiltorch
+torch
+sklearn
+arviz
