@@ -158,7 +158,7 @@ def two_equal_clusters_additional_points():
             mean = (0,i*5)
             cov = ((1,0),(0,1))
             size = 50
-            index_values = [i+x*50 for x in range(size)]
+            index_values = [i for x in range(size)]
             cluster = np.random.multivariate_normal(mean=mean, cov=cov, size=size)
             data_holder = data_holder.append(pd.DataFrame(data=cluster, index=index_values, columns=column_values))
         print(data_holder)
