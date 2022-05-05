@@ -11,6 +11,8 @@ import numpy as np
 from sklearn.preprocessing import StandardScaler
 import seaborn as sns
 from scipy.spatial import distance
+from scipy.cluster.hierarchy import ward, fcluster
+from scipy.spatial.distance import pdist
 
 class Clustering:
     def __init__(self, data, number_clusters, linkage="single", verbose=False) -> None:
@@ -74,8 +76,14 @@ class Clustering:
         return classification
 
     def _ward_point(self, point):
-        # TO-DO
-        pass
+        X = self.data['Point'].tolist()
+        X.append(point)
+        y = pdist(X, metric='Euclidean')
+        Z = ward(y)
+        c = fcluster(Z, self.n_clusters, criterion='maxclust').tolist()
+        i = c.index(c[-1])
+        label = self.data['Label'].tolist()[i]
+        return label
 
     def _bayesian_distance(self, point0, point1):
         '''

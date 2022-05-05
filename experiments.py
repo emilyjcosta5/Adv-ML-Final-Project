@@ -1,8 +1,11 @@
+import warnings
+warnings.simplefilter(action='ignore', category=FutureWarning)
+
 from clustering import Clustering
 import numpy as np
 import pandas as pd
 
-def linear_equally_spaced_clusters(n_points=100, proportion=(1,1), n_clusters=2):
+def linear_equally_spaced_clusters(n_points=100, proportion=(1,1), n_clusters=2, linkage='single'):
     '''
     This serves as a base case and simple evaluation - how does our methodology perform
     in the case where clusters are equally space, same covariance, and linearly space? 
@@ -42,7 +45,7 @@ def linear_equally_spaced_clusters(n_points=100, proportion=(1,1), n_clusters=2)
             cluster = np.random.multivariate_normal(mean=mean, cov=cov, size=size)
             tmp = tmp.append(pd.DataFrame(data=cluster, index=index_values, columns=column_values))
         # do initial clustering and check accuracy of clustering methodology
-        clustering = Clustering(tmp, n_clusters)
+        clustering = Clustering(tmp, n_clusters, linkage=linkage)
         tmp = clustering.get_clustered_data()
         euclidean_accuracy = np.abs(tmp['Label'].corr(tmp['Cluster Number'], method='spearman'))
         euclidean_accuracies.append(euclidean_accuracy)
