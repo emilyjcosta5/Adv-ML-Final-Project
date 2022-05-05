@@ -82,7 +82,10 @@ class Clustering:
         Z = ward(y)
         c = fcluster(Z, self.n_clusters, criterion='maxclust').tolist()
         i = c.index(c[-1])
-        label = self.data['Label'].tolist()[i]
+        try:
+            label = self.data['Label'].tolist()[i]
+        except IndexError:
+            return None
         return label
 
     def _bayesian_distance(self, point0, point1):
